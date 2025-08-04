@@ -13,6 +13,8 @@ Aurora.SpellHandler.PopulateSpellbook({
     DiffuseMagic        = NewSpell(122783),
     ExpelHarm           = NewSpell(322101),
     ManaTea             = NewSpell(197908),
+    SheilunsGift        = NewSpell(399491),
+    JadeSerpentStatue   = NewSpell(115313),
 
     -- Schaden (Fistweaving)
     TigerPalm           = NewSpell(100780),
