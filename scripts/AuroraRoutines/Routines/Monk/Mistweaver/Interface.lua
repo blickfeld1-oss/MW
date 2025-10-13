@@ -3,18 +3,15 @@
 
 local namespace = "MistweaverHybrid"
 Aurora.State = Aurora.State or {}
-Aurora.State[namespace] = { fistweave = true }
+Aurora.State[namespace] = Aurora.State[namespace] or { fistweave = true }
+local state = Aurora.State[namespace]
 
--- Commands module may not be available on Aurora by default, so require it if needed
-local Commands = Aurora.Commands or Tinkr:require("commands")
-
-Commands:Register("mwhybrid", "Hybrid Mistweaver toggles", function(msg)
+Aurora:RegisterCommand("mwhybrid", function(msg)
     if msg == "fistweave" then
-        local st = Aurora.State[namespace]
-        st.fistweave = not st.fistweave
-        print("[MistweaverHybrid] Fistweave mode: " .. (st.fistweave and "on" or "off"))
+        state.fistweave = not state.fistweave
+        print("[MistweaverHybrid] Fistweave mode: " .. (state.fistweave and "on" or "off"))
     else
         print("Usage: /mwhybrid fistweave")
     end
-end)
+end, "Hybrid Mistweaver toggles")
 
