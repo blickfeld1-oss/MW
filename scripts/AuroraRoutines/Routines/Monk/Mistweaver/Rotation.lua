@@ -1,61 +1,87 @@
--- Get a reference to our namespace
+-- Mistweaver Hybrid PvP Rotation
+-- Aurora Framework implementation
+
 local namespace = "MistweaverHybrid"
 
--- Get commonly used units
-local player = Aurora.UnitManager:Get("player")
-local target = Aurora.UnitManager:Get("target")
+-- Units
+local player  = Aurora.UnitManager:Get("player")
+local target  = Aurora.UnitManager:Get("target")
+local ally1   = Aurora.UnitManager:Get("party1")
+local ally2   = Aurora.UnitManager:Get("party2")
 
--- Get the spellbook
-local spells = Aurora.SpellHandler.Spellbooks.monk["2"][namespace].spells
-local auras = Aurora.SpellHandler.Spellbooks.monk["2"][namespace].auras
-local talents = Aurora.SpellHandler.Spellbooks.monk["2"][namespace].talents
+-- Spellbook shortcuts
+local book   = Aurora.SpellHandler.Spellbooks.monk["2"][namespace]
+local spells = book.spells
+local auras  = book.auras
+local state  = Aurora.State[namespace]
 
--- Define the hybrid rotation logic
+-- Helper: return lowest health ally
+local function lowestAlly()
+    local units = {player, ally1, ally2}
+    local lowest, hp = nil, 101
+    for _, u in ipairs(units) do
+        if u and u.exists and not u.dead and u.health.percent < hp then
+            lowest, hp = u, u.health.percent
+        end
+    end
+    return lowest
+end
+
+-- Combat logic
 local function HybridRotation()
-    -- Defensive and Healing
-    -- Use Life Cocoon on player if health is very low
-    if player.health.percent < 20 and spells.LifeCocoon:execute(player) then return true end
+    local ally = lowestAlly()
 
-    -- Use Fortifying Brew if health is low
-    if player.health.percent < 40 and spells.FortifyingBrew:execute() then return true end
+    if ally then
+        -- Emergency tools
+        if ally.health.percent < 25 and spells.LifeCocoon:execute(ally) then return true end
+        if ally.health.percent < 35 and spells.Revival:execute() then return true end
+        if ally == player and player.health.percent < 40 and spells.FortifyingBrew:execute() then return true end
+        if ally == player and player.health.percent < 50 and spells.DiffuseMagic:execute() then return true end
 
-    -- Keep Renewing Mist up on the player
-    if not player:aura(auras.RenewingMistHoT) and spells.RenewingMist:execute(player) then return true end
+        -- Core healing
+        if not ally:aura(auras.RenewingMistHoT) and spells.RenewingMist:execute(ally) then return true end
+        if ally.health.percent < 60 and spells.EnvelopingMist:execute(ally) then return true end
+        if ally.health.percent < 70 then
+            if spells.ThunderFocusTea:ready() and spells.ThunderFocusTea:execute(player) then return true end
+            if spells.Vivify:execute(ally) then return true end
+        end
+    end
 
-    -- Use Vivify for moderate healing
-    if player.health.percent < 70 and spells.Vivify:execute(player) then return true end
+    -- Self stabilisation
+    if player.health.percent < 80 and spells.ExpelHarm:execute(player) then return true end
 
-    -- Fistweaving DPS Rotation
-    -- Use Rising Sun Kick on cooldown
-    if spells.RisingSunKick:execute(target) then return true end
-
-    -- Use Blackout Kick to reset Rising Sun Kick
-    if spells.BlackoutKick:execute(target) then return true end
-
-    -- Use Tiger Palm to generate Chi and buff Blackout Kick
-    if spells.TigerPalm:execute(target) then return true end
-
-    -- Use Crackling Jade Lightning as a filler
-    if spells.CracklingJadeLightning:execute(target) then return true end
+    -- Fistweaving block when no one is in danger
+    if state.fistweave and (not ally or ally.health.percent > 80) and target.exists and target.enemy then
+        if spells.RisingSunKick:execute(target) then return true end
+        if player:aura(auras.TeachingsOfTheMonastery) == 3 and spells.BlackoutKick:execute(target) then return true end
+        if spells.BlackoutKick:execute(target) then return true end
+        if spells.TigerPalm:execute(target) then return true end
+        if spells.CracklingJadeLightning:execute(target) then return true end
+    end
 
     return false
 end
 
--- Define out of combat actions
+-- Out of combat utility
 local function OutOfCombat()
-    -- Placeholder for out-of-combat logic
+    -- Place statue and maintain renewing mist
+    if spells.JadeSerpentStatue:ready() then
+        spells.JadeSerpentStatue:execute(player)
+    end
+    for _, u in ipairs({player, ally1, ally2}) do
+        if u and u.exists and not u.dead and not u:aura(auras.RenewingMistHoT) then
+            spells.RenewingMist:execute(u)
+        end
+    end
     return false
 end
 
--- Register the routine with Aurora
 Aurora:RegisterRoutine(function()
-    -- Skip if player is dead, casting, or in a vehicle
     if player.dead or player:casting() or player:inVehicle() then return end
-
-    -- Run appropriate function based on combat state
-    if player.combat and target.exists and target.enemy then
+    if player.combat then
         HybridRotation()
     else
         OutOfCombat()
     end
 end, "MONK", 2, namespace)
+
